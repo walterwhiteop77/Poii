@@ -86,14 +86,18 @@ async def handle_video_request(client, m: Message):
     # ------------------------------------------------
     try:
         # Fixed: Using client.send_video instead of m.reply_video
-        sent = playlist = []
+        
 
-# your existing file fetch loop
+ playlist = []
+
 for file in files:
-    try:
-        playlist.append(file.file_id)
-    except:
-        playlist.append(file["file_id"])
+    file_id = getattr(file, "file_id", None)
+
+    if not file_id:
+        file_id = file.get("file_id")
+
+    if file_id:
+        playlist.append(file_id)
 
 if not playlist:
     return await message.reply("❌ No videos found!")
