@@ -9,6 +9,7 @@ PLAYER_TIMEOUT = 1200
 PLAYER_DB = {}
 
 
+# ===== BUTTONS =====
 def get_buttons():
     return InlineKeyboardMarkup([
         [
@@ -21,16 +22,17 @@ def get_buttons():
     ])
 
 
+# ===== AUTO DELETE =====
 async def delete_player(client, chat_id, msg_id, user_id):
     await asyncio.sleep(PLAYER_TIMEOUT)
     try:
         await client.delete_messages(chat_id, msg_id)
     except:
         pass
-
     PLAYER_DB.pop(user_id, None)
 
 
+# ===== CREATE PLAYER =====
 async def create_player(client, message, user_id):
 
     # prevent multiple players
@@ -64,8 +66,8 @@ async def create_player(client, message, user_id):
     asyncio.create_task(delete_player(client, message.chat.id, sent.id, user_id))
 
 
-# ===== CALLBACK HANDLER =====
-@Client.on_callback_query(filters.regex("^player_"))
+# ===== MAIN HANDLER =====
+@Client.on_callback_query(filters.regex("^player_"), group=0)
 async def player_handler(client, query):
     await query.answer()
 
@@ -76,36 +78,42 @@ async def player_handler(client, query):
 
     data = PLAYER_DB[user_id]
 
-    # ===== CHECK LIMIT =====
+    # ===== LIMIT CHECK =====
     is_premium = await db.has_premium_access(user_id)
     limit = PREMIUM_DAILY_LIMIT if is_premium else DAILY_LIMIT
     used = await db.get_video_count(user_id) or 0
 
     if used >= limit:
-        return await query.answer(
-            "❌ Daily limit reached!",
-            show_alert=True
-        )
+        return await query.answer("❌ Daily limit reached!", show_alert=True)
 
     # ===== NEXT =====
     if query.data == "player_next":
 
-        # fetch new video
-        video_id = await db.get_random_video()
+        attempts = 0
+        video_id = None
+
+        while attempts < 5:
+            new_video = await db.get_random_video()
+
+            if new_video and new_video not in data["history"]:
+                video_id = new_video
+                break
+
+            attempts += 1
 
         if not video_id:
-            return await query.answer("No more videos!", show_alert=True)
+            return await query.answer("⚠️ No new videos available!", show_alert=True)
 
         data["history"].append(video_id)
         data["index"] += 1
 
         await db.increment_video_count(user_id)
 
-    # ===== PREV =====
+    # ===== PREVIOUS =====
     elif query.data == "player_prev":
 
-        if data["index"] == 0:
-            return await query.answer("No previous video!", show_alert=True)
+        if data["index"] <= 0:
+            return await query.answer("⚠️ No previous video!", show_alert=True)
 
         data["index"] -= 1
         video_id = data["history"][data["index"]]
@@ -117,12 +125,12 @@ async def player_handler(client, query):
 
         await client.send_message(
             user_id,
-            f"🔖 Bookmarked\n\n<code>{video_id}</code>"
+            f"🔖 Bookmarked Video\n\n<code>{video_id}</code>"
         )
 
         return await query.answer("Saved ✅", show_alert=True)
 
-    # current video
+    # ===== CURRENT VIDEO =====
     video_id = data["history"][data["index"]]
 
     await client.edit_message_media(
