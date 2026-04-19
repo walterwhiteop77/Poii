@@ -7,7 +7,7 @@ import asyncio
 from plugins.verification import av_x_verification
 from plugins.ban_manager import ban_manager
 from utils import temp, auto_delete_message, is_user_joined
-
+from plugins.player import create_player
 
 @Client.on_message(filters.command("getvideo") | filters.regex(r"(?i)get video"))
 async def handle_video_request(client, m: Message):
@@ -86,27 +86,16 @@ async def handle_video_request(client, m: Message):
     # ------------------------------------------------
     try:
         # Fixed: Using client.send_video instead of m.reply_video
-        sent = await client.send_video(
-            chat_id=m.chat.id,
-            video=video_id,
-            protect_content=PROTECT_CONTENT,
-            caption=(
-                f"𝘗𝘰𝘸𝘦𝘳𝘦𝘥 𝘉𝘺: {temp.B_LINK}\n\n"
-                "<blockquote>"
-                "ᴛʜɪꜱ ꜰɪʟᴇ ᴡɪʟʟ ʙᴇ ᴀᴜᴛᴏ ᴅᴇʟᴇᴛᴇ ᴀꜰᴛᴇʀ 10 ᴍɪɴᴜᴛᴇꜱ.\n"
-                "ᴘʟᴇᴀꜱᴇ ꜰᴏʀᴡᴀʀᴅ ᴛʜɪꜱ ꜰɪʟᴇ ꜱᴏᴍᴇᴡʜᴇʀᴇ ᴇʟꜱᴇ "
-                "ᴏʀ ꜱᴀᴠᴇ ɪɴ ꜱᴀᴠᴇᴅ ᴍᴇꜱꜱᴀɢᴇꜱ."
-                "</blockquote>"
-            ),
-            reply_to_message_id=m.id
-        )
+        sent = playlist = []
 
-        # Increase daily count ONLY after successful send
-        await db.increase_video_count(user_id, username)
+# your existing file fetch loop
+for file in files:
+    try:
+        playlist.append(file.file_id)
+    except:
+        playlist.append(file["file_id"])
 
-        # Auto delete in background
-        asyncio.create_task(auto_delete_message(m, sent))
+if not playlist:
+    return await message.reply("❌ No videos found!")
 
-    except Exception as e:
-        await m.reply(f"❌ Failed to send video: {str(e)}")
-        
+await create_player(client, message, message.from_user.id, playlist)
