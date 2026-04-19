@@ -35,6 +35,7 @@ PREMIUM_LOGS = int(environ.get("PREMIUM_LOGS", "-1002702898412"))
 VERIFIED_LOG = int(environ.get("VERIFIED_LOG", "-1002378958723"))
 
 POST_CHANNEL = int(environ.get("POST_CHANNEL", "-1002843484373"))
+VIDEO_CHANNEL = int(environ.get("VIDEO_CHANNEL", "-1002756243661"))
 BRAZZER_CHANNEL = int(environ.get("BRAZZER_CHANNEL", "-1002737831383"))
 
 # Auth channels list
