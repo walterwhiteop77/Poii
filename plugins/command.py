@@ -121,12 +121,11 @@ async def send_about_text(client, message):
     )
 
 # =========================================================
-# 🔙 CALLBACK QUERY HANDLER
+# 🔙 CALLBACK QUERY HANDLER (FIXED)
 # =========================================================
-@Client.on_callback_query()
+@Client.on_callback_query(filters.regex("^(close_data|get)$"), group=1)
 async def cb_handler(client: Client, query: CallbackQuery):
     data = query.data
-    user_id = query.from_user.id
 
     if data == "close_data":
         await query.message.delete()
@@ -141,3 +140,5 @@ async def cb_handler(client: Client, query: CallbackQuery):
             reply_markup=InlineKeyboardMarkup(buttons),
             parse_mode=enums.ParseMode.HTML
         )
+
+    await query.answer()
