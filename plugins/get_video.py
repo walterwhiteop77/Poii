@@ -88,18 +88,19 @@ async def handle_video_request(client, m: Message):
         # Fixed: Using client.send_video instead of m.reply_video
         
 
- playlist = []
 
-for file in files:
-    file_id = getattr(file, "file_id", None)
+        playlist = []
 
-    if not file_id:
-        file_id = file.get("file_id")
+        for file in files:
+            file_id = getattr(file, "file_id", None)
 
-    if file_id:
-        playlist.append(file_id)
+            if not file_id:
+                file_id = file.get("file_id")
 
-if not playlist:
-    return await message.reply("❌ No videos found!")
+            if file_id:
+                playlist.append(file_id)
 
-await create_player(client, message, message.from_user.id, playlist)
+        if not playlist:
+            return await message.reply("❌ No videos found!")
+
+        await create_player(client, message, message.from_user.id, playlist)
