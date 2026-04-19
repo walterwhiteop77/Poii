@@ -9,7 +9,6 @@ PLAYER_TIMEOUT = 1200
 PLAYER_DB = {}
 
 
-# ===== BUTTONS =====
 def get_buttons():
     return InlineKeyboardMarkup([
         [
@@ -22,7 +21,6 @@ def get_buttons():
     ])
 
 
-# ===== AUTO DELETE =====
 async def delete_player(client, chat_id, msg_id, user_id):
     await asyncio.sleep(PLAYER_TIMEOUT)
     try:
@@ -32,10 +30,19 @@ async def delete_player(client, chat_id, msg_id, user_id):
     PLAYER_DB.pop(user_id, None)
 
 
+# ===== FETCH MULTIPLE VIDEOS =====
+async def get_videos_batch(n=5):
+    videos = []
+    for _ in range(n):
+        v = await db.get_random_video()
+        if v and v not in videos:
+            videos.append(v)
+    return videos
+
+
 # ===== CREATE PLAYER =====
 async def create_player(client, message, user_id):
 
-    # prevent multiple players
     if user_id in PLAYER_DB:
         data = PLAYER_DB[user_id]
         if time() - data["time"] < PLAYER_TIMEOUT:
@@ -44,14 +51,14 @@ async def create_player(client, message, user_id):
                 reply_to_message_id=data["msg_id"]
             )
 
-    video_id = await db.get_random_video()
+    videos = await get_videos_batch(5)
 
-    if not video_id:
+    if not videos:
         return await message.reply("❌ No videos found!")
 
     sent = await client.send_video(
         chat_id=message.chat.id,
-        video=video_id,
+        video=videos[0],
         caption="🎬 Video Player\n\nVideo 1",
         reply_markup=get_buttons()
     )
@@ -60,13 +67,13 @@ async def create_player(client, message, user_id):
         "msg_id": sent.id,
         "time": time(),
         "index": 0,
-        "history": [video_id]
+        "playlist": videos
     }
 
     asyncio.create_task(delete_player(client, message.chat.id, sent.id, user_id))
 
 
-# ===== MAIN HANDLER =====
+# ===== HANDLER =====
 @Client.on_callback_query(filters.regex("^player_"), group=0)
 async def player_handler(client, query):
     await query.answer()
@@ -78,7 +85,7 @@ async def player_handler(client, query):
 
     data = PLAYER_DB[user_id]
 
-    # ===== LIMIT CHECK =====
+    # ===== LIMIT =====
     is_premium = await db.has_premium_access(user_id)
     limit = PREMIUM_DAILY_LIMIT if is_premium else DAILY_LIMIT
     used = await db.get_video_count(user_id) or 0
@@ -89,49 +96,36 @@ async def player_handler(client, query):
     # ===== NEXT =====
     if query.data == "player_next":
 
-        attempts = 0
-        video_id = None
-
-        while attempts < 5:
-            new_video = await db.get_random_video()
-
-            if new_video and new_video not in data["history"]:
-                video_id = new_video
-                break
-
-            attempts += 1
-
-        if not video_id:
-            return await query.answer("⚠️ No new videos available!", show_alert=True)
-
-        data["history"].append(video_id)
         data["index"] += 1
+
+        # fetch more if end reached
+        if data["index"] >= len(data["playlist"]):
+            new_videos = await get_videos_batch(3)
+            data["playlist"].extend(new_videos)
 
         await db.increment_video_count(user_id)
 
-    # ===== PREVIOUS =====
+    # ===== PREV =====
     elif query.data == "player_prev":
 
         if data["index"] <= 0:
             return await query.answer("⚠️ No previous video!", show_alert=True)
 
         data["index"] -= 1
-        video_id = data["history"][data["index"]]
 
     # ===== BOOKMARK =====
     elif query.data == "player_bookmark":
 
-        video_id = data["history"][data["index"]]
+        vid = data["playlist"][data["index"]]
 
         await client.send_message(
             user_id,
-            f"🔖 Bookmarked Video\n\n<code>{video_id}</code>"
+            f"🔖 Bookmarked\n\n<code>{vid}</code>"
         )
 
         return await query.answer("Saved ✅", show_alert=True)
 
-    # ===== CURRENT VIDEO =====
-    video_id = data["history"][data["index"]]
+    video_id = data["playlist"][data["index"]]
 
     await client.edit_message_media(
         chat_id=query.message.chat.id,
