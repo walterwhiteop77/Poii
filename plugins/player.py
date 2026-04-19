@@ -2,6 +2,8 @@ import asyncio
 from time import time
 from pyrogram import Client, filters
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, InputMediaVideo
+from database.users_db import db
+from info import DAILY_LIMIT, PREMIUM_DAILY_LIMIT
 
 PLAYER_TIMEOUT = 1200
 PLAYER_DB = {}
@@ -29,8 +31,9 @@ async def delete_player(client, chat_id, msg_id, user_id):
     PLAYER_DB.pop(user_id, None)
 
 
-async def create_player(client, message, user_id, playlist):
+async def create_player(client, message, user_id):
 
+    # prevent multiple players
     if user_id in PLAYER_DB:
         data = PLAYER_DB[user_id]
         if time() - data["time"] < PLAYER_TIMEOUT:
@@ -39,10 +42,15 @@ async def create_player(client, message, user_id, playlist):
                 reply_to_message_id=data["msg_id"]
             )
 
+    video_id = await db.get_random_video()
+
+    if not video_id:
+        return await message.reply("❌ No videos found!")
+
     sent = await client.send_video(
         chat_id=message.chat.id,
-        video=playlist[0],
-        caption="🎬 Video Player\n\nUse buttons 👇",
+        video=video_id,
+        caption="🎬 Video Player\n\nVideo 1",
         reply_markup=get_buttons()
     )
 
@@ -50,13 +58,13 @@ async def create_player(client, message, user_id, playlist):
         "msg_id": sent.id,
         "time": time(),
         "index": 0,
-        "playlist": playlist
+        "history": [video_id]
     }
 
     asyncio.create_task(delete_player(client, message.chat.id, sent.id, user_id))
 
 
-# ===== SINGLE CALLBACK HANDLER (IMPORTANT) =====
+# ===== CALLBACK HANDLER =====
 @Client.on_callback_query(filters.regex("^player_"))
 async def player_handler(client, query):
     await query.answer()
@@ -67,39 +75,62 @@ async def player_handler(client, query):
         return await query.answer("⚠️ Player expired!", show_alert=True)
 
     data = PLAYER_DB[user_id]
-    playlist = data["playlist"]
-    index = data["index"]
 
+    # ===== CHECK LIMIT =====
+    is_premium = await db.has_premium_access(user_id)
+    limit = PREMIUM_DAILY_LIMIT if is_premium else DAILY_LIMIT
+    used = await db.get_video_count(user_id) or 0
+
+    if used >= limit:
+        return await query.answer(
+            "❌ Daily limit reached!",
+            show_alert=True
+        )
+
+    # ===== NEXT =====
     if query.data == "player_next":
-        index += 1
-        if index >= len(playlist):
-            index = 0
 
+        # fetch new video
+        video_id = await db.get_random_video()
+
+        if not video_id:
+            return await query.answer("No more videos!", show_alert=True)
+
+        data["history"].append(video_id)
+        data["index"] += 1
+
+        await db.increment_video_count(user_id)
+
+    # ===== PREV =====
     elif query.data == "player_prev":
-        index -= 1
-        if index < 0:
-            index = len(playlist) - 1
 
+        if data["index"] == 0:
+            return await query.answer("No previous video!", show_alert=True)
+
+        data["index"] -= 1
+        video_id = data["history"][data["index"]]
+
+    # ===== BOOKMARK =====
     elif query.data == "player_bookmark":
-        file_id = playlist[index]
+
+        video_id = data["history"][data["index"]]
 
         await client.send_message(
             user_id,
-            f"🔖 Bookmarked\n\n<code>{file_id}</code>"
+            f"🔖 Bookmarked\n\n<code>{video_id}</code>"
         )
 
         return await query.answer("Saved ✅", show_alert=True)
 
-    file_id = playlist[index]
+    # current video
+    video_id = data["history"][data["index"]]
 
     await client.edit_message_media(
         chat_id=query.message.chat.id,
         message_id=query.message.id,
         media=InputMediaVideo(
-            media=file_id,
-            caption=f"🎬 Video Player\n\nVideo {index+1}/{len(playlist)}"
+            media=video_id,
+            caption=f"🎬 Video Player\n\nVideo {data['index']+1}"
         ),
         reply_markup=get_buttons()
     )
-
-    data["index"] = index
