@@ -74,7 +74,7 @@ async def handle_video_request(client, m: Message):
     # create playlist (for now single video, can expand later)
     playlist = [video_id]
 
-    await create_player(client, m, user_id, playlist)
+    await create_player(client, m, user_id)
 
     # ---------------- UPDATE COUNT ---------------- #
 
