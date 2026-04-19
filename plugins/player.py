@@ -8,6 +8,7 @@ PLAYER_TIMEOUT = 1200
 PLAYER_DB = {}
 
 
+# ===== BUTTONS =====
 def buttons():
     return InlineKeyboardMarkup([
         [
@@ -20,6 +21,7 @@ def buttons():
     ])
 
 
+# ===== AUTO DELETE =====
 async def delete_player(client, chat_id, msg_id, user_id):
     await asyncio.sleep(PLAYER_TIMEOUT)
     try:
@@ -29,6 +31,7 @@ async def delete_player(client, chat_id, msg_id, user_id):
     PLAYER_DB.pop(user_id, None)
 
 
+# ===== CREATE PLAYER =====
 async def create_player(client, message, user_id):
 
     if user_id in PLAYER_DB:
@@ -61,7 +64,7 @@ async def create_player(client, message, user_id):
     asyncio.create_task(delete_player(client, message.chat.id, sent.id, user_id))
 
 
-# ✅ ONLY PLAYER HANDLER — NO EXTRA LOGIC
+# ===== MAIN HANDLER =====
 @Client.on_callback_query(filters.regex("^player_"), group=0)
 async def player_handler(client, query):
     await query.answer()
@@ -76,22 +79,32 @@ async def player_handler(client, query):
     # ===== NEXT =====
     if query.data == "player_next":
 
-        new_video = await db.get_random_video()
+        attempts = 0
+        new_video = None
+
+        # try to get a new unique video
+        while attempts < 5:
+            vid = await db.get_random_video()
+
+            if vid and vid not in data["history"]:
+                new_video = vid
+                break
+
+            attempts += 1
 
         if not new_video:
-            return await query.answer("No videos!", show_alert=True)
+            return await query.answer("⚠️ No new videos!", show_alert=True)
 
         data["history"].append(new_video)
         data["index"] += 1
 
-        # use your existing DB function only
         await db.increment_video_count(user_id)
 
     # ===== BACK =====
     elif query.data == "player_prev":
 
         if data["index"] <= 0:
-            return await query.answer("⚠️ No previous!", show_alert=True)
+            return await query.answer("⚠️ No previous video!", show_alert=True)
 
         data["index"] -= 1
 
@@ -107,6 +120,7 @@ async def player_handler(client, query):
 
         return await query.answer("Saved ✅", show_alert=True)
 
+    # ===== CURRENT VIDEO =====
     vid = data["history"][data["index"]]
 
     await client.edit_message_media(
