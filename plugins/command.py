@@ -141,7 +141,8 @@ async def cb_handler(client: Client, query: CallbackQuery):
             parse_mode=enums.ParseMode.HTML
         )
 
-    await query.answer()        return
+    await query.answer()       
+    return
     elif argument == "help":
         await send_legal_text(client, message, script.HELP_TXT)
         return
