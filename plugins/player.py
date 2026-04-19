@@ -3,14 +3,12 @@ from time import time
 from pyrogram import Client, filters
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, InputMediaVideo
 from database.users_db import db
-from info import DAILY_LIMIT, PREMIUM_DAILY_LIMIT
 
 PLAYER_TIMEOUT = 1200
 PLAYER_DB = {}
 
 
-# ===== BUTTON UI =====
-def get_buttons():
+def buttons():
     return InlineKeyboardMarkup([
         [
             InlineKeyboardButton("⏮ Back", callback_data="player_prev"),
@@ -22,7 +20,6 @@ def get_buttons():
     ])
 
 
-# ===== AUTO DELETE =====
 async def delete_player(client, chat_id, msg_id, user_id):
     await asyncio.sleep(PLAYER_TIMEOUT)
     try:
@@ -32,10 +29,8 @@ async def delete_player(client, chat_id, msg_id, user_id):
     PLAYER_DB.pop(user_id, None)
 
 
-# ===== CREATE PLAYER =====
 async def create_player(client, message, user_id):
 
-    # prevent multiple players
     if user_id in PLAYER_DB:
         data = PLAYER_DB[user_id]
         if time() - data["time"] < PLAYER_TIMEOUT:
@@ -53,7 +48,7 @@ async def create_player(client, message, user_id):
         chat_id=message.chat.id,
         video=video_id,
         caption="🎬 Video Player\n\nVideo 1",
-        reply_markup=get_buttons()
+        reply_markup=buttons()
     )
 
     PLAYER_DB[user_id] = {
@@ -66,7 +61,7 @@ async def create_player(client, message, user_id):
     asyncio.create_task(delete_player(client, message.chat.id, sent.id, user_id))
 
 
-# ===== MAIN HANDLER =====
+# ✅ ONLY PLAYER HANDLER — NO EXTRA LOGIC
 @Client.on_callback_query(filters.regex("^player_"), group=0)
 async def player_handler(client, query):
     await query.answer()
@@ -77,14 +72,6 @@ async def player_handler(client, query):
         return await query.answer("⚠️ Player expired!", show_alert=True)
 
     data = PLAYER_DB[user_id]
-
-    # ===== LIMIT CHECK =====
-    is_premium = await db.has_premium_access(user_id)
-    limit = PREMIUM_DAILY_LIMIT if is_premium else DAILY_LIMIT
-    used = await db.get_video_count(user_id) or 0
-
-    if used >= limit:
-        return await query.answer("❌ Daily limit reached!", show_alert=True)
 
     # ===== NEXT =====
     if query.data == "player_next":
@@ -97,38 +84,37 @@ async def player_handler(client, query):
         data["history"].append(new_video)
         data["index"] += 1
 
-        # increment usage
+        # use your existing DB function only
         await db.increment_video_count(user_id)
 
-    # ===== PREVIOUS =====
+    # ===== BACK =====
     elif query.data == "player_prev":
 
         if data["index"] <= 0:
-            return await query.answer("⚠️ No previous video!", show_alert=True)
+            return await query.answer("⚠️ No previous!", show_alert=True)
 
         data["index"] -= 1
 
     # ===== BOOKMARK =====
     elif query.data == "player_bookmark":
 
-        video_id = data["history"][data["index"]]
+        vid = data["history"][data["index"]]
 
         await client.send_message(
             user_id,
-            f"🔖 Bookmarked Video\n\n<code>{video_id}</code>"
+            f"🔖 Bookmarked\n\n<code>{vid}</code>"
         )
 
         return await query.answer("Saved ✅", show_alert=True)
 
-    # ===== CURRENT VIDEO =====
-    video_id = data["history"][data["index"]]
+    vid = data["history"][data["index"]]
 
     await client.edit_message_media(
         chat_id=query.message.chat.id,
         message_id=query.message.id,
         media=InputMediaVideo(
-            media=video_id,
+            media=vid,
             caption=f"🎬 Video Player\n\nVideo {data['index']+1}"
         ),
-        reply_markup=get_buttons()
+        reply_markup=buttons()
     )
