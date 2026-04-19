@@ -1,17 +1,13 @@
 import asyncio
 from time import time
 from pyrogram import Client, filters
-from pyrogram.types import (
-    InlineKeyboardMarkup,
-    InlineKeyboardButton,
-    InputMediaVideo
-)
+from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, InputMediaVideo
 
 PLAYER_TIMEOUT = 1200
 PLAYER_DB = {}
 
 
-def get_player_buttons():
+def get_buttons():
     return InlineKeyboardMarkup([
         [
             InlineKeyboardButton("⏮ Back", callback_data="player_prev"),
@@ -39,34 +35,31 @@ async def create_player(client, message, user_id, playlist):
         data = PLAYER_DB[user_id]
         if time() - data["time"] < PLAYER_TIMEOUT:
             return await message.reply(
-                "⚠️ You already have an active player!\n\nUse it 👇",
+                "⚠️ Player already active 👇",
                 reply_to_message_id=data["msg_id"]
             )
 
-    index = 0
-    file_id = playlist[index]
-
     sent = await client.send_video(
         chat_id=message.chat.id,
-        video=file_id,
-        caption="🎬 <b>Video Player</b>\n\nUse buttons below 👇",
-        reply_markup=get_player_buttons()
+        video=playlist[0],
+        caption="🎬 Video Player\n\nUse buttons 👇",
+        reply_markup=get_buttons()
     )
 
     PLAYER_DB[user_id] = {
         "msg_id": sent.id,
         "time": time(),
-        "index": index,
+        "index": 0,
         "playlist": playlist
     }
 
     asyncio.create_task(delete_player(client, message.chat.id, sent.id, user_id))
 
 
-# ===== NEXT =====
-@Client.on_callback_query(filters.regex("^player_next$"))
-async def next_video(client, query):
-    await query.answer()  # 🔥 IMPORTANT
+# ===== SINGLE CALLBACK HANDLER (IMPORTANT) =====
+@Client.on_callback_query(filters.regex("^player_"))
+async def player_handler(client, query):
+    await query.answer()
 
     user_id = query.from_user.id
 
@@ -74,12 +67,28 @@ async def next_video(client, query):
         return await query.answer("⚠️ Player expired!", show_alert=True)
 
     data = PLAYER_DB[user_id]
-
     playlist = data["playlist"]
-    index = data["index"] + 1
+    index = data["index"]
 
-    if index >= len(playlist):
-        index = 0
+    if query.data == "player_next":
+        index += 1
+        if index >= len(playlist):
+            index = 0
+
+    elif query.data == "player_prev":
+        index -= 1
+        if index < 0:
+            index = len(playlist) - 1
+
+    elif query.data == "player_bookmark":
+        file_id = playlist[index]
+
+        await client.send_message(
+            user_id,
+            f"🔖 Bookmarked\n\n<code>{file_id}</code>"
+        )
+
+        return await query.answer("Saved ✅", show_alert=True)
 
     file_id = playlist[index]
 
@@ -88,61 +97,9 @@ async def next_video(client, query):
         message_id=query.message.id,
         media=InputMediaVideo(
             media=file_id,
-            caption=f"🎬 <b>Video Player</b>\n\nVideo {index+1}/{len(playlist)}"
+            caption=f"🎬 Video Player\n\nVideo {index+1}/{len(playlist)}"
         ),
-        reply_markup=get_player_buttons()
+        reply_markup=get_buttons()
     )
 
     data["index"] = index
-
-
-# ===== PREVIOUS =====
-@Client.on_callback_query(filters.regex("^player_prev$"))
-async def prev_video(client, query):
-    await query.answer()  # 🔥 IMPORTANT
-
-    user_id = query.from_user.id
-
-    if user_id not in PLAYER_DB:
-        return await query.answer("⚠️ Player expired!", show_alert=True)
-
-    data = PLAYER_DB[user_id]
-
-    playlist = data["playlist"]
-    index = data["index"] - 1
-
-    if index < 0:
-        index = len(playlist) - 1
-
-    file_id = playlist[index]
-
-    await client.edit_message_media(
-        chat_id=query.message.chat.id,
-        message_id=query.message.id,
-        media=InputMediaVideo(
-            media=file_id,
-            caption=f"🎬 <b>Video Player</b>\n\nVideo {index+1}/{len(playlist)}"
-        ),
-        reply_markup=get_player_buttons()
-    )
-
-    data["index"] = index
-
-
-# ===== BOOKMARK =====
-@Client.on_callback_query(filters.regex("^player_bookmark$"))
-async def bookmark(client, query):
-    await query.answer("Saved ✅", show_alert=True)  # 🔥 IMPORTANT
-
-    user_id = query.from_user.id
-
-    if user_id not in PLAYER_DB:
-        return
-
-    data = PLAYER_DB[user_id]
-    file_id = data["playlist"][data["index"]]
-
-    await client.send_message(
-        user_id,
-        f"🔖 <b>Bookmarked Video</b>\n\n<code>{file_id}</code>"
-    )
