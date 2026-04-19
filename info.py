@@ -72,17 +72,17 @@ TUTORIAL_LINK = environ.get("TUTORIAL_LINK", "https://t.me/+ny_72fisEuJmMmI1")
 # 💳 PAYMENT SETTINGS
 # =========================================================
 UPI_ID = environ.get("UPI_ID", "fff")
-QR_CODE_IMAGE = environ.get("QR_CODE_IMAGE", "https://envs.sh/Fqa.jpg")
+QR_CODE_IMAGE = environ.get("QR_CODE_IMAGE", "https://i.ibb.co/Q3fzgQ69/x.jpg")
 
 # =========================================================
 # 🖼️ IMAGES
 # =========================================================
-START_PIC = environ.get("START_PIC", "https://envs.sh/Fqa.jpg")
-AUTH_PICS = environ.get("AUTH_PICS", "https://envs.sh/Fqa.jpg")
-VERIFY_IMG = environ.get("VERIFY_IMG", "https://envs.sh/Fqa.jpg")
-NO_IMG = environ.get("NO_IMG", "https://envs.sh/Fqa.jpg")
+START_PIC = environ.get("START_PIC", "https://i.ibb.co/Q3fzgQ69/x.jpg")
+AUTH_PICS = environ.get("AUTH_PICS", "https://i.ibb.co/Q3fzgQ69/x.jpg")
+VERIFY_IMG = environ.get("VERIFY_IMG", "https://i.ibb.co/Q3fzgQ69/x.jpg")
+NO_IMG = environ.get("NO_IMG", "https://i.ibb.co/Q3fzgQ69/x.jpg")
 
 # =========================================================
 # 🌐 WEB APP
 # =========================================================
-WEB_APP_URL = environ.get("WEB_APP_URL", "")
+WEB_APP_URL = environ.get("WEB_APP_URL", "https://poii.onrender.com")
